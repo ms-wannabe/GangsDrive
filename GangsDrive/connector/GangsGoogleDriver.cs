@@ -94,6 +94,16 @@ namespace GangsDrive.connector
 
         public NtStatus FindFiles(string fileName, out IList<FileInformation> files, DokanFileInfo info)
         {
+            IList<Google.Apis.Drive.v2.Data.File> list;
+
+            FilesResource.ListRequest req = _driveService.Files.List();
+
+            do
+            {
+                req.Q = String.Format("", fileName);
+                FileList i = req.Execute();
+            } while (!String.IsNullOrEmpty(req.PageToken));
+
             files = null;
             return DokanResult.Success;
         }
