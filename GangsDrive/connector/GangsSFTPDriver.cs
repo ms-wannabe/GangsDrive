@@ -204,7 +204,7 @@ namespace GangsDrive
             streamSize = 0;
             return DokanResult.NotImplemented;
         }
-        z
+
         public NtStatus FindFiles(string fileName, out IList<FileInformation> files, DokanFileInfo info)
         {
             List<SftpFile> fileList;
