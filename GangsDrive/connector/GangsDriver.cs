@@ -8,6 +8,7 @@ namespace GangsDrive
 {
     abstract class GangsDriver
     {
+        protected const string CredentialPath = "../credentials";
         protected readonly string _mountPoint;
         protected readonly string _driverName;
         protected bool _isMounted;

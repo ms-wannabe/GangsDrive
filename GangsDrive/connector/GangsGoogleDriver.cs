@@ -29,8 +29,6 @@ namespace GangsDrive.connector
                                                    FileAccess.Delete |
                                                    FileAccess.GenericWrite;
 
-
-        private const string CredentialPath = "../credentials";
         private string[] Scopes = { 
                                       DriveService.Scope.Drive, 
                                       DriveService.Scope.DriveFile, 
