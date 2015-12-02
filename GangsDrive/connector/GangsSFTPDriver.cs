@@ -330,12 +330,15 @@ namespace GangsDrive
 
         public NtStatus MoveFile(string oldName, string newName, bool replace, DokanFileInfo info)
         {
+            oldName = ToUnixStylePath(oldName);
+            newName = ToUnixStylePath(newName);
+
             if (!sftpClient.Exists(newName))
             {
                 info.Context = null;
                 sftpClient.RenameFile(oldName, newName);
             }
-            else if(replace)
+            else if (replace)
             {
                 info.Context = null;
 
