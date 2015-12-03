@@ -440,7 +440,20 @@ namespace GangsDrive
             }
 
             return DokanResult.Success;
-        } 
+        }
+
+        public NtStatus FindStreams(string fileName, IntPtr enumContext, out string streamName, out long streamSize, DokanFileInfo info)
+        {
+            streamName = String.Empty;
+            streamSize = 0;
+            return DokanResult.NotImplemented;
+        }
+
+        public NtStatus FindStreams(string fileName, out IList<FileInformation> streams, DokanFileInfo info)
+        {
+            streams = new FileInformation[0];
+            return DokanResult.NotImplemented;
+        }
         #endregion
 
         #region Overriding of GangsDriver
