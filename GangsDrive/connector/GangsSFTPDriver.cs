@@ -30,7 +30,7 @@ namespace GangsDrive
         private SftpClient sftpClient;
 
         public GangsSFTPDriver(string host, int port, string username, string password, string mountPoint)
-            :base(mountPoint, "SFTP")
+            : base(mountPoint, "SFTP")
         {
             this.host = host;
             this.port = port;
@@ -45,7 +45,7 @@ namespace GangsDrive
         #region Implementation of IDokanOperations
         public void Cleanup(string fileName, DokanFileInfo info)
         {
-            if(info.Context != null && info.Context is SftpFileStream)
+            if (info.Context != null && info.Context is SftpFileStream)
             {
                 (info.Context as SftpFileStream).Dispose();
             }
@@ -67,7 +67,7 @@ namespace GangsDrive
 
             fileName = ToUnixStylePath(fileName);
 
-            if(sftpClient.Exists(fileName))
+            if (sftpClient.Exists(fileName))
                 return DokanResult.FileExists;
 
             try
@@ -75,7 +75,7 @@ namespace GangsDrive
                 sftpClient.CreateDirectory(fileName);
                 return DokanResult.Success;
             }
-            catch(Renci.SshNet.Common.SshException)
+            catch (Renci.SshNet.Common.SshException)
             {
                 return DokanResult.AccessDenied;
             }
@@ -83,9 +83,14 @@ namespace GangsDrive
 
         public NtStatus CreateFile(string fileName, FileAccess access, FileShare share, FileMode mode, FileOptions options, FileAttributes attributes, DokanFileInfo info)
         {
-            Debug.WriteLine(@"{0} : {1} {2}", fileName, mode.ToString(), access.ToString());
+            //Debug.WriteLine(@"{0} : {1} {2}", fileName, mode.ToString(), access.ToString());
 
             fileName = ToUnixStylePath(fileName);
+            
+            if(fileName.EndsWith("pk.txt", StringComparison.OrdinalIgnoreCase))
+            {
+                Debug.Print("pk.txt, {0}, {1}, {2}, {3}", access.ToString(), share.ToString(), mode.ToString(), options.ToString());
+            }
 
             if (fileName.EndsWith("desktop.ini", StringComparison.OrdinalIgnoreCase) ||
                 fileName.EndsWith("autorun.inf", StringComparison.OrdinalIgnoreCase))
@@ -93,56 +98,90 @@ namespace GangsDrive
                 return DokanResult.FileNotFound;
             }
 
-            // todo : add to memory cache
+            Debug.Print("11");
             bool exists = sftpClient.Exists(fileName);
-            SftpFileAttributes attr = sftpClient.GetAttributes(fileName);
-            bool readWriteAttributes = (access & DataAccess) == 0;
-            bool readAccess = (access & DataWriteAccess) == 0;
-            System.IO.FileAccess acs = readAccess ? System.IO.FileAccess.Read : System.IO.FileAccess.ReadWrite;
+            Debug.Print("22");
 
-            switch(mode)
+            // todo : add to memory cache
+
+            if (info.IsDirectory)
             {
-                case FileMode.Open:
-
-                    if (!exists)
-                        return DokanResult.FileNotFound;
-
-                    if (((uint)access & 0xe0000027) == 0 || attr.IsDirectory)
+                try
+                {
+                    switch (mode)
                     {
-                        info.IsDirectory = attr.IsDirectory;
-                        info.Context = new object();
-                        return DokanResult.Success;
+                        case FileMode.Open:
+                            if (!exists)
+                                return DokanResult.PathNotFound;
+
+                            break;
+
+                        case FileMode.CreateNew:
+                            if(exists)
+                                return DokanResult.FileExists;
+
+                            sftpClient.CreateDirectory(fileName);
+
+                            break;
                     }
-
-                    break;
-
-                case FileMode.CreateNew:
-                    if (exists)
-                        return DokanResult.AlreadyExists;
-
-
-                    // cache invalidate
-
-                    break;
-
-                case FileMode.Truncate:
-                    if (!exists)
-                        return DokanResult.FileNotFound;
-                    // cache invalidate
-                    break;
-
-                default:
-                    // cache invalidate
-                    break;
+                }
+                catch (Renci.SshNet.Common.SshException)
+                {
+                    return DokanResult.AccessDenied;
+                }
             }
+            else
+            {
+                bool readWriteAttributes = (access & DataAccess) == 0;
+                bool readAccess = (access & DataWriteAccess) == 0;
+                System.IO.FileAccess acs = readAccess ? System.IO.FileAccess.Read : System.IO.FileAccess.ReadWrite;
 
-            try
-            {
-                info.Context = sftpClient.Open(fileName, mode, acs) as SftpFileStream;
-            }
-            catch(Renci.SshNet.Common.SshException)
-            {
-                return DokanResult.AccessDenied;
+                switch (mode)
+                {
+                    case FileMode.Open:
+
+                        if (!exists)
+                            return DokanResult.FileNotFound;
+
+                        SftpFileAttributes attr = sftpClient.GetAttributes(fileName);
+                        if (readWriteAttributes || attr.IsDirectory)
+                        {
+                            info.IsDirectory = attr.IsDirectory;
+                            info.Context = new object();
+                            return DokanResult.Success;
+                        }
+
+                        break;
+
+                    case FileMode.CreateNew:
+                        if (exists)
+                            return DokanResult.FileExists;
+
+                        // cache invalidate
+
+                        break;
+
+                    case FileMode.Truncate:
+                        if (!exists)
+                            return DokanResult.FileNotFound;
+
+                        // cache invalidate
+
+                        break;
+
+                    default:
+                        // cache invalidate
+                        break;
+                }
+
+                try
+                {
+                    info.Context = sftpClient.Open(fileName, mode, acs) as SftpFileStream;
+                }
+                catch (Renci.SshNet.Common.SshException)
+                {
+                    return DokanResult.AccessDenied;
+                }
             }
 
             return DokanResult.Success;
@@ -152,7 +191,7 @@ namespace GangsDrive
         {
             fileName = ToUnixStylePath(fileName);
 
-            if(!sftpClient.Exists(fileName))
+            if (!sftpClient.Exists(fileName))
             {
                 return DokanResult.FileNotFound;
             }
@@ -161,7 +200,7 @@ namespace GangsDrive
             {
                 sftpClient.DeleteDirectory(fileName);
             }
-            catch(SftpPermissionDeniedException)
+            catch (SftpPermissionDeniedException)
             {
                 return DokanResult.AccessDenied;
             }
@@ -177,7 +216,7 @@ namespace GangsDrive
         {
             fileName = ToUnixStylePath(fileName);
 
-            if(!sftpClient.Exists(fileName))
+            if (!sftpClient.Exists(fileName))
             {
                 return DokanResult.FileNotFound;
             }
@@ -186,11 +225,11 @@ namespace GangsDrive
             {
                 sftpClient.DeleteFile(fileName);
             }
-            catch(SftpPermissionDeniedException)
+            catch (SftpPermissionDeniedException)
             {
                 return DokanResult.AccessDenied;
             }
-            catch(SshException)
+            catch (SshException)
             {
                 return DokanResult.InvalidParameter;
             }
@@ -208,12 +247,12 @@ namespace GangsDrive
         public NtStatus FindFiles(string fileName, out IList<FileInformation> files, DokanFileInfo info)
         {
             List<SftpFile> fileList;
-            
+
             try
             {
                 fileList = sftpClient.ListDirectory(ToUnixStylePath(fileName)).ToList();
             }
-            catch(Renci.SshNet.Common.SftpPermissionDeniedException)
+            catch (Renci.SshNet.Common.SftpPermissionDeniedException)
             {
                 files = null;
                 return DokanResult.AccessDenied;
@@ -221,7 +260,7 @@ namespace GangsDrive
 
             files = new List<FileInformation>();
 
-            foreach(var file in fileList)
+            foreach (var file in fileList)
             {
                 FileInformation finfo = new FileInformation();
                 SftpFileAttributes attr = sftpClient.GetAttributes(file.FullName);
@@ -233,7 +272,7 @@ namespace GangsDrive
                 finfo.LastWriteTime = file.LastWriteTime;
                 finfo.Length = file.Length;
 
-                if(file.IsDirectory)
+                if (file.IsDirectory)
                 {
                     finfo.Attributes |= FileAttributes.Directory;
                     finfo.Length = 0;
@@ -243,7 +282,7 @@ namespace GangsDrive
                     finfo.Attributes |= FileAttributes.Normal;
                 }
 
-                if(finfo.FileName.StartsWith("."))
+                if (finfo.FileName.StartsWith("."))
                 {
                     finfo.Attributes |= FileAttributes.Hidden;
                 }
@@ -363,7 +402,7 @@ namespace GangsDrive
 
         public NtStatus ReadFile(string fileName, byte[] buffer, out int bytesRead, long offset, DokanFileInfo info)
         {
-            if(info.Context == null)
+            if (info.Context == null)
             {
                 using (SftpFileStream stream = sftpClient.Open(ToUnixStylePath(fileName), FileMode.Open, System.IO.FileAccess.Read))
                 {
@@ -423,9 +462,9 @@ namespace GangsDrive
 
         public NtStatus WriteFile(string fileName, byte[] buffer, out int bytesWritten, long offset, DokanFileInfo info)
         {
-            if(info.Context == null)
+            if (info.Context == null)
             {
-                using(SftpFileStream stream = sftpClient.Open(fileName, FileMode.Open, System.IO.FileAccess.Write))
+                using (SftpFileStream stream = sftpClient.Open(fileName, FileMode.Open, System.IO.FileAccess.Write))
                 {
                     stream.Position = offset;
                     stream.Write(buffer, 0, buffer.Length);
@@ -467,16 +506,16 @@ namespace GangsDrive
             {
                 sftpClient.Connect();
             }
-            catch(SocketException)
+            catch (SocketException)
             {
                 MessageBox.Show(string.Format("Cannot Connect to {0}:{1}", host, port));
                 return;
             }
-            catch(SshAuthenticationException)
+            catch (SshAuthenticationException)
             {
                 MessageBox.Show("Invalid username or password");
             }
-            catch(Exception e)
+            catch (Exception e)
             {
                 MessageBox.Show(e.ToString());
                 return;
