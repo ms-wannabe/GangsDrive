@@ -42,7 +42,7 @@ namespace GangsDrive
 
             this._isMounted = true;
             OnMountChanged(new connector.MountChangedArgs(_isMounted));
-            (this as IDokanOperations).Mount(this.MountPoint, DokanOptions.DebugMode, 5);
+            (this as IDokanOperations).Mount(this.MountPoint, DokanOptions.RemovableDrive, 5);
         }
         
         public virtual void ClearMountPoint()
