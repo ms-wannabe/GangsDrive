@@ -447,6 +447,18 @@ namespace GangsDrive
 
         public NtStatus SetFileTime(string fileName, DateTime? creationTime, DateTime? lastAccessTime, DateTime? lastWriteTime, DokanFileInfo info)
         {
+            fileName = ToUnixStylePath(fileName);
+
+            SftpFileAttributes attr = sftpClient.GetAttributes(fileName);
+
+            if (lastAccessTime != null)
+                attr.LastAccessTime = lastAccessTime.Value;
+
+            if (lastWriteTime != null)
+                attr.LastWriteTime = lastWriteTime.Value;
+
+            sftpClient.SetAttributes(fileName, attr);
+
             return DokanResult.Success;
         }
 
