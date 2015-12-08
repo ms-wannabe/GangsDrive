@@ -19,7 +19,7 @@ using Renci.SshNet.Sftp;
 
 namespace GangsDrive.connector
 {
-    class GangsGoogleDriver : GangsDriver, IDokanOperations
+    public class GangsGoogleDriver : GangsDriver, IDokanOperations
     {
         private const FileAccess DataAccess = FileAccess.ReadData | FileAccess.WriteData | FileAccess.AppendData |
                                  FileAccess.Execute |

@@ -6,7 +6,7 @@ using System.Text;
 
 namespace GangsDrive
 {
-    abstract class GangsDriver
+    public abstract class GangsDriver
     {
         protected const string CredentialPath = "../credentials";
         protected readonly string _mountPoint;

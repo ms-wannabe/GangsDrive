@@ -10,7 +10,7 @@ using System.Windows.Forms;
 
 namespace GangsDrive
 {
-    class GangsISODriver : GangsDriver, IDokanOperations
+    public class GangsISODriver : GangsDriver, IDokanOperations
     {
         private const FileAccess DataAccess = FileAccess.ReadData | FileAccess.WriteData | FileAccess.AppendData |
                                               FileAccess.Execute |

@@ -15,7 +15,7 @@ using System.Net.Sockets;
 
 namespace GangsDrive
 {
-    class GangsSFTPDriver : GangsDriver, IDokanOperations
+    public class GangsSFTPDriver : GangsDriver, IDokanOperations
     {
         private const FileAccess DataAccess = FileAccess.ReadData | FileAccess.WriteData | FileAccess.AppendData |
                                          FileAccess.Execute |

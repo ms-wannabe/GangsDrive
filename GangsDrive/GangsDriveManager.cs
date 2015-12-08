@@ -48,7 +48,7 @@ namespace GangsDrive
         }
     }
 
-    class GangsDriveManager
+    public class GangsDriveManager
     {
         private List<GangsDriverSet> driverSet;
         private int maxDriverSize;

@@ -5,6 +5,11 @@ VisualStudioVersion = 12.0.40629.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GangsDrive", "GangsDrive\GangsDrive.csproj", "{8EE4DB7C-CC2F-4DD3-A7C5-F94A17F82A6F}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GangsDrive.GUI", "GangsDrive.GUI\GangsDrive.GUI.csproj", "{FFEF0B77-98C9-415C-BC67-CDEDFED28A5A}"
+	ProjectSection(ProjectDependencies) = postProject
+		{8EE4DB7C-CC2F-4DD3-A7C5-F94A17F82A6F} = {8EE4DB7C-CC2F-4DD3-A7C5-F94A17F82A6F}
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +26,14 @@ Global
 		{8EE4DB7C-CC2F-4DD3-A7C5-F94A17F82A6F}.Release|Any CPU.Build.0 = Release|Any CPU
 		{8EE4DB7C-CC2F-4DD3-A7C5-F94A17F82A6F}.SignedRelease|Any CPU.ActiveCfg = Release|Any CPU
 		{8EE4DB7C-CC2F-4DD3-A7C5-F94A17F82A6F}.SignedRelease|Any CPU.Build.0 = Release|Any CPU
+		{FFEF0B77-98C9-415C-BC67-CDEDFED28A5A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FFEF0B77-98C9-415C-BC67-CDEDFED28A5A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FFEF0B77-98C9-415C-BC67-CDEDFED28A5A}.Release (StyleCop)|Any CPU.ActiveCfg = Release|Any CPU
+		{FFEF0B77-98C9-415C-BC67-CDEDFED28A5A}.Release (StyleCop)|Any CPU.Build.0 = Release|Any CPU
+		{FFEF0B77-98C9-415C-BC67-CDEDFED28A5A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FFEF0B77-98C9-415C-BC67-CDEDFED28A5A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FFEF0B77-98C9-415C-BC67-CDEDFED28A5A}.SignedRelease|Any CPU.ActiveCfg = Release|Any CPU
+		{FFEF0B77-98C9-415C-BC67-CDEDFED28A5A}.SignedRelease|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
