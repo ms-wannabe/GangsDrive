@@ -52,5 +52,10 @@ namespace GangsDrive.GUI
         {
             manager.UnmountDriver(sftpIndex);
         }
+
+        private void Window_Closed(object sender, EventArgs e)
+        {
+            manager.UnmountAllDriver();
+        }
     }
 }
