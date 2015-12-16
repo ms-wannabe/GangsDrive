@@ -2,6 +2,7 @@
 
 # GangsDrive
 [![Build Status](https://travis-ci.org/ms-wannabe/GangsDrive.svg?branch=master)](https://travis-ci.org/ms-wannabe/GangsDrive)
+[![Build status](https://ci.appveyor.com/api/projects/status/yipmchk2ijfqwity?svg=true)](https://ci.appveyor.com/project/pknam/gangsdrive)
 
 Virtual network drive application for Windows
 
