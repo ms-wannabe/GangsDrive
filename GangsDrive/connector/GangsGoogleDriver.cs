@@ -5,6 +5,7 @@ using Google.Apis.Services;
 using Google.Apis.Util.Store;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Net;
 
 using System;
 using System.Collections.Generic;
@@ -14,8 +15,6 @@ using System.IO;
 using System.Diagnostics;
 using DokanNet;
 using FileAccess = DokanNet.FileAccess;
-using Renci.SshNet;
-using Renci.SshNet.Sftp;
 
 namespace GangsDrive.connector
 {
@@ -42,6 +41,11 @@ namespace GangsDrive.connector
         public GangsGoogleDriver(string mountPoint)
             :base(mountPoint, "Google")
         {
+        }
+
+        private string ToUnixStylePath(string winPath)
+        {
+            return string.Format(@"/{0}", winPath.Replace(@"\", @"/").Replace("//", "/"));
         }
 
         #region Implementation of IDokanOperations
@@ -92,17 +96,24 @@ namespace GangsDrive.connector
 
         public NtStatus FindFiles(string fileName, out IList<FileInformation> files, DokanFileInfo info)
         {
-            IList<Google.Apis.Drive.v2.Data.File> list;
+            string path = ToUnixStylePath(fileName);
+            IList<Google.Apis.Drive.v2.Data.File> file_list = GetChildrenById(GetIdByPath(path));
 
-            FilesResource.ListRequest req = _driveService.Files.List();
+            files = new List<FileInformation>();
 
-            do
+            foreach (var file in file_list)
             {
-                req.Q = String.Format("", fileName);
-                FileList i = req.Execute();
-            } while (!String.IsNullOrEmpty(req.PageToken));
+                FileInformation finfo = new FileInformation()
+                {
+                    FileName = file.Title,
+                    CreationTime = (file.CreatedDate.HasValue) ? file.CreatedDate.Value : new DateTime(1970, 1, 1),
+                    Length = (file.FileSize.HasValue) ? file.FileSize.Value : 0,
+                    Attributes = (IsDirectory(file)) ? FileAttributes.Directory : FileAttributes.Normal
+                };
 
-            files = null;
+                files.Add(finfo);
+            }
+
             return DokanResult.Success;
         }
 
@@ -129,7 +140,17 @@ namespace GangsDrive.connector
 
         public NtStatus GetFileInformation(string fileName, out FileInformation fileInfo, DokanFileInfo info)
         {
-            fileInfo = new FileInformation();            
+            string path = ToUnixStylePath(fileName);
+            Google.Apis.Drive.v2.Data.File file_obj = GetFileById(GetIdByPath(path));
+
+            fileInfo = new FileInformation()
+            {
+                FileName = file_obj.Title,
+                CreationTime = (file_obj.CreatedDate.HasValue) ? file_obj.CreatedDate.Value : new DateTime(1970, 1, 1),
+                Length = (file_obj.FileSize.HasValue) ? file_obj.FileSize.Value : 0,
+                Attributes = (IsDirectory(file_obj)) ? FileAttributes.Directory : FileAttributes.Normal
+            };
+
             return DokanResult.Success;
         }
 
@@ -168,10 +189,23 @@ namespace GangsDrive.connector
         {
             try
             {
-                if (info.Context != null)
+                string path = ToUnixStylePath(fileName);
+                if (info.Context == null)
                 {
-                    using (var stream = new FileStream(fileName, FileMode.Open, System.IO.FileAccess.Read))
+                    Google.Apis.Drive.v2.Data.File file_obj = GetFileById(GetIdByPath(path));
+
+                    if (IsDirectory(file_obj))
                     {
+                        bytesRead = 0;
+                        return DokanResult.AccessDenied;
+                    }
+
+                    var web_stream = _driveService.HttpClient.GetStreamAsync(file_obj.DownloadUrl);
+                    var result = web_stream.Result;
+ 
+                    using (var stream = result)
+                    {
+                        //result.CopyTo(stream);
                         stream.Position = offset;
                         bytesRead = stream.Read(buffer, 0, buffer.Length);
                     }
@@ -269,7 +303,7 @@ namespace GangsDrive.connector
             if (IsMounted)
                 return;
 
-            using (var stream = new FileStream("google_secret.json", System.IO.FileMode.Open, System.IO.FileAccess.Read))
+            using (var stream = new FileStream("C:\\Users\\snownymph\\Documents\\GitHub\\GangsDrive\\GangsDrive\\credentials\\google_secret.json", System.IO.FileMode.Open, System.IO.FileAccess.Read))
             {
                 var credentials = GoogleWebAuthorizationBroker.AuthorizeAsync(
                         GoogleClientSecrets.Load(stream).Secrets,
@@ -299,6 +333,94 @@ namespace GangsDrive.connector
             base.ClearMountPoint();
 
             _driveService.Dispose();
+        }
+        #endregion
+
+        #region GoogleDrive API Helper 
+        public string GetRecursiveParent(string path, IList<ParentReference> parent, int idx)
+        {
+            string[] path_list = path.Split('/');
+            FilesResource.GetRequest parent_req = _driveService.Files.Get(parent[0].Id);
+            Google.Apis.Drive.v2.Data.File parent_file = parent_req.Execute();
+
+            if (parent[0].IsRoot.Value)
+                return parent[0].Id;
+            if (parent_file.Title == path_list[idx] && !parent[0].IsRoot.Value)
+                return GetRecursiveParent(path, parent_file.Parents, idx - 1);
+            else
+                return null;
+        }
+
+        public string GetIdByPath(string path)
+        {
+            path = path.Substring(1);
+            if (path == "/" || path == "")
+                return "root";
+
+            string[] path_list = path.Split('/');
+            List<Google.Apis.Drive.v2.Data.File> file_search_list = new List<Google.Apis.Drive.v2.Data.File>();
+
+            FilesResource.ListRequest req = _driveService.Files.List();
+            do
+            {
+                req.Q = "title='" + path_list.Last<string>() + "'";
+                FileList file_search = req.Execute();
+                file_search_list.AddRange(file_search.Items);
+            } while (!String.IsNullOrEmpty(req.PageToken));
+
+            if (file_search_list.Count == 1)
+            {
+                return file_search_list.First<Google.Apis.Drive.v2.Data.File>().Id;
+            }
+            else
+            {
+                int last_idx = path_list.Length - 2;
+                Google.Apis.Drive.v2.Data.File ret = new Google.Apis.Drive.v2.Data.File();
+                foreach (Google.Apis.Drive.v2.Data.File f in file_search_list)
+                {
+                    if (GetRecursiveParent(path, f.Parents, last_idx) != null)
+                    {
+                        ret = f;
+                        break;
+                    }
+                }
+
+                return ret.Id;
+            }
+        }
+        public List<Google.Apis.Drive.v2.Data.File> GetChildrenById(string id)
+        {
+            List<Google.Apis.Drive.v2.Data.File> result = new List<Google.Apis.Drive.v2.Data.File>();
+
+            ChildrenResource.ListRequest child_req = _driveService.Children.List(id);
+            ChildList ch = child_req.Execute();
+
+            foreach (ChildReference a in ch.Items)
+            {
+                FilesResource.GetRequest get_file = _driveService.Files.Get(a.Id);
+                Google.Apis.Drive.v2.Data.File file_obj = get_file.Execute();
+                result.Add(file_obj);
+            }
+
+            return result;
+        }
+        public bool IsDirectory(Google.Apis.Drive.v2.Data.File file)
+        {
+            if (!file.Copyable.HasValue)
+            {
+                return false;
+            }
+
+            return (!file.Copyable.Value && file.MimeType == "application/vnd.google-apps.folder");
+        }
+        public Google.Apis.Drive.v2.Data.File GetFileById(string id)
+        {
+            if (id != null)
+            {
+                FilesResource.GetRequest file = _driveService.Files.Get(id);
+                return file.Execute();
+            }
+            else return new Google.Apis.Drive.v2.Data.File();
         }
         #endregion
     }
