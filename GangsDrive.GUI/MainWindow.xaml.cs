@@ -22,6 +22,7 @@ namespace GangsDrive.GUI
     {
         GangsDriveManager manager;
         int sftpIndex;
+        int gdriveIndex;
 
         public MainWindow()
         {
@@ -56,6 +57,16 @@ namespace GangsDrive.GUI
         private void Window_Closed(object sender, EventArgs e)
         {
             manager.UnmountAllDriver();
+        }
+
+        private void btngdriveMount1_Click(object sender, RoutedEventArgs e)
+        {
+            gdriveIndex = manager.AddDriver(new GangsDrive.connector.GangsGoogleDriver("s:\\"));
+        }
+
+        private void btngdriveUnmount1_Click(object sender, RoutedEventArgs e)
+        {
+            manager.UnmountDriver(gdriveIndex);
         }
     }
 }
