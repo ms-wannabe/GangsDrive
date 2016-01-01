@@ -74,6 +74,82 @@ namespace GangsDrive.connector
 
         public NtStatus CreateFile(string fileName, FileAccess access, FileShare share, FileMode mode, FileOptions options, FileAttributes attributes, DokanFileInfo info)
         {
+            string path = ToUnixStylePath(fileName);
+            bool exists = (GetIdByPath(path) != null) ? true : false;
+
+            if (info.IsDirectory)
+            {
+                switch (mode)
+                {
+                    case FileMode.Open:
+                        if (!exists)
+                            return DokanResult.PathNotFound;
+
+                        break;
+
+                    case FileMode.CreateNew:
+                        if (exists)
+                            return DokanResult.FileExists;
+
+                        //create directory
+                        break;
+                }
+            }
+            else
+            {
+                bool readWriteAttributes = (access & DataAccess) == 0;
+                bool readAccess = (access & DataWriteAccess) == 0;
+                System.IO.FileAccess acs = readAccess ? System.IO.FileAccess.Read : System.IO.FileAccess.ReadWrite;
+                Google.Apis.Drive.v2.Data.File file_obj = GetFileById(GetIdByPath(path));
+
+                switch (mode)
+                {
+                    case FileMode.Open:
+
+                        if (!exists)
+                            return DokanResult.FileNotFound;
+
+                        if (readWriteAttributes || IsDirectory(file_obj))
+                        {
+                            info.IsDirectory = IsDirectory(file_obj);
+                            info.Context = new object();
+                            return DokanResult.Success;
+                        }
+
+                        break;
+
+                    case FileMode.CreateNew:
+                        if (exists)
+                            return DokanResult.FileExists;
+
+                        // cache invalidate
+
+                        break;
+
+                    case FileMode.Truncate:
+                        if (!exists)
+                            return DokanResult.FileNotFound;
+
+                        // cache invalidate
+
+                        break;
+
+                    default:
+                        // cache invalidate
+                        break;
+                }
+
+                try
+                {
+                    var web_stream = _driveService.HttpClient.GetStreamAsync(file_obj.DownloadUrl);
+                    info.Context = web_stream.Result;
+                }
+                catch (Exception e)
+                {
+                    return DokanResult.AccessDenied;
+                }
+            }
+
             return DokanResult.Success;
         }
 
@@ -372,7 +448,7 @@ namespace GangsDrive.connector
             {
                 return file_search_list.First<Google.Apis.Drive.v2.Data.File>().Id;
             }
-            else
+            else if (file_search_list.Count > 1)
             {
                 int last_idx = path_list.Length - 2;
                 Google.Apis.Drive.v2.Data.File ret = new Google.Apis.Drive.v2.Data.File();
@@ -387,6 +463,7 @@ namespace GangsDrive.connector
 
                 return ret.Id;
             }
+            else return null;
         }
         public List<Google.Apis.Drive.v2.Data.File> GetChildrenById(string id)
         {
