@@ -62,6 +62,7 @@ namespace GangsDrive.GUI
         private void btngdriveMount1_Click(object sender, RoutedEventArgs e)
         {
             gdriveIndex = manager.AddDriver(new GangsDrive.connector.GangsGoogleDriver("s:\\"));
+            manager.MountDriver(gdriveIndex);
         }
 
         private void btngdriveUnmount1_Click(object sender, RoutedEventArgs e)
