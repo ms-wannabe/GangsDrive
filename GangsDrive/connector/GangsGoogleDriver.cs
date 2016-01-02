@@ -92,6 +92,7 @@ namespace GangsDrive.connector
                             return DokanResult.FileExists;
 
                         //create directory
+                        CreateDirectory(path);
                         break;
                 }
             }
@@ -141,7 +142,8 @@ namespace GangsDrive.connector
 
                 try
                 {
-                    var web_stream = _driveService.HttpClient.GetStreamAsync(file_obj.DownloadUrl);
+                    var web_stream = _driveService.HttpClient.GetStreamAsync(file_obj.DownloadUrl); 
+                    web_stream.Wait();
                     info.Context = web_stream.Result;
                 }
                 catch (Exception e)
@@ -266,10 +268,10 @@ namespace GangsDrive.connector
             try
             {
                 string path = ToUnixStylePath(fileName);
+                Google.Apis.Drive.v2.Data.File file_obj = GetFileById(GetIdByPath(path));
+
                 if (info.Context == null)
                 {
-                    Google.Apis.Drive.v2.Data.File file_obj = GetFileById(GetIdByPath(path));
-
                     if (IsDirectory(file_obj))
                     {
                         bytesRead = 0;
@@ -277,18 +279,21 @@ namespace GangsDrive.connector
                     }
 
                     var web_stream = _driveService.HttpClient.GetStreamAsync(file_obj.DownloadUrl);
+                    web_stream.Wait();
                     var result = web_stream.Result;
+                    result.Position = offset;
+                    bytesRead = result.Read(buffer, 0, buffer.Length);
  
-                    using (var stream = result)
-                    {
-                        //result.CopyTo(stream);
-                        stream.Position = offset;
-                        bytesRead = stream.Read(buffer, 0, buffer.Length);
-                    }
+                    //using (var stream = result)
+                    //{
+                    //    //result.CopyTo(stream);
+                    //    stream.Position = offset;
+                    //    bytesRead = stream.Read(buffer, 0, buffer.Length);
+                    //}
                 }
                 else
                 {
-                    FileStream stream = info.Context as FileStream;
+                    Stream stream = info.Context as Stream;
 
                     lock (stream)
                     {
@@ -413,6 +418,22 @@ namespace GangsDrive.connector
         #endregion
 
         #region GoogleDrive API Helper 
+        public Google.Apis.Drive.v2.Data.File CreateDirectory(string path)
+        {
+            path = path.Substring(1);
+            string file_name = path.Substring(path.LastIndexOf('/'), path.Length);
+            string parent_path = path.Substring(0, path.LastIndexOf('/'));
+
+            Google.Apis.Drive.v2.Data.File body = new Google.Apis.Drive.v2.Data.File();
+            body.Title = file_name;
+            body.MimeType = "application/vnd.google-apps.folder";
+            body.Parents = new List<ParentReference>() 
+            {
+                new ParentReference() { Id = GetIdByPath(parent_path) } 
+            };
+
+            return _driveService.Files.Insert(body).Execute();
+        }
         public string GetRecursiveParent(string path, IList<ParentReference> parent, int idx)
         {
             string[] path_list = path.Split('/');
@@ -436,13 +457,20 @@ namespace GangsDrive.connector
             string[] path_list = path.Split('/');
             List<Google.Apis.Drive.v2.Data.File> file_search_list = new List<Google.Apis.Drive.v2.Data.File>();
 
-            FilesResource.ListRequest req = _driveService.Files.List();
-            do
+            try
             {
-                req.Q = "title='" + path_list.Last<string>() + "'";
-                FileList file_search = req.Execute();
-                file_search_list.AddRange(file_search.Items);
-            } while (!String.IsNullOrEmpty(req.PageToken));
+                FilesResource.ListRequest req = _driveService.Files.List();
+                do
+                {
+                    req.Q = "title='" + path_list.Last<string>() + "'";
+                    FileList file_search = req.Execute();
+                    file_search_list.AddRange(file_search.Items);
+                } while (!String.IsNullOrEmpty(req.PageToken));
+            }
+            catch (IOException io)
+            {
+                return null;
+            }
 
             if (file_search_list.Count == 1)
             {
