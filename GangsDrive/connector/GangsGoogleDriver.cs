@@ -51,20 +51,12 @@ namespace GangsDrive.connector
         #region Implementation of IDokanOperations
         public void Cleanup(string fileName, DokanFileInfo info)
         {
-            if (info.Context != null && info.Context is FileStream)
-            {
-                (info.Context as FileStream).Dispose();
-            }
-            info.Context = null;
+            
         }
 
         public void CloseFile(string fileName, DokanFileInfo info)
         {
-            if (info.Context != null && info.Context is FileStream)
-            {
-                (info.Context as FileStream).Dispose();
-            }
-            info.Context = null;
+            
         }
 
         public NtStatus CreateDirectory(string fileName, DokanFileInfo info)
@@ -74,34 +66,64 @@ namespace GangsDrive.connector
 
         public NtStatus CreateFile(string fileName, FileAccess access, FileShare share, FileMode mode, FileOptions options, FileAttributes attributes, DokanFileInfo info)
         {
-            //string path = ToUnixStylePath(fileName);
-            //bool exists = (GetIdByPath(path) != null) ? true : false;
+            Debug.Print("[CreateFile] fileName : {0}, mode : {1}", fileName, mode);
 
-            //if (info.IsDirectory)
-            //{
-            //    switch (mode)
-            //    {
-            //        case FileMode.Open:
-            //            if (!exists)
-            //                return DokanResult.PathNotFound;
+            if (fileName.EndsWith("desktop.ini", StringComparison.OrdinalIgnoreCase) ||
+                fileName.EndsWith("autorun.inf", StringComparison.OrdinalIgnoreCase))
+            {
+                return DokanResult.FileNotFound;
+            }
 
-            //            break;
+            string path = ToUnixStylePath(fileName);
+            string id = GetIdByPath(path);
+            bool exists = (id != null) ? true : false;
 
-            //        case FileMode.CreateNew:
-            //            if (exists)
-            //                return DokanResult.FileExists;
+            if (info.IsDirectory && mode == System.IO.FileMode.CreateNew)
+                return DokanResult.AccessDenied;
 
-            //            //create directory
-            //            CreateDirectory(path);
-            //            break;
-            //    }
-            //}
+            if (info.IsDirectory)
+            {
+                switch (mode)
+                {
+                    case FileMode.Open:
+                        if (!exists)
+                            return DokanResult.PathNotFound;
+
+                        break;
+
+                    case FileMode.CreateNew:
+                        if (exists)
+                            return DokanResult.FileExists;
+
+                        //create directory
+                        CreateDirectory(path);
+                        break;
+                }
+            }
+            else
+            {
+                switch(mode)
+                {
+                    case FileMode.Open:
+                        if (!exists)
+                            return DokanResult.FileNotFound;
+
+                        info.Context = GetFileById(id);
+                        info.IsDirectory = IsDirectory(info.Context as Google.Apis.Drive.v2.Data.File);
+
+                        break;
+
+                    default:
+                        break;
+                }
+            }
+
             //else
             //{
             //    bool readWriteAttributes = (access & DataAccess) == 0;
             //    bool readAccess = (access & DataWriteAccess) == 0;
             //    System.IO.FileAccess acs = readAccess ? System.IO.FileAccess.Read : System.IO.FileAccess.ReadWrite;
-            //    Google.Apis.Drive.v2.Data.File file_obj = GetFileById(GetIdByPath(path));
+            //    Google.Apis.Drive.v2.Data.File file_obj = GetFileById(id);
 
             //    switch (mode)
             //    {
@@ -110,9 +132,11 @@ namespace GangsDrive.connector
             //            if (!exists)
             //                return DokanResult.FileNotFound;
 
-            //            if (readWriteAttributes || IsDirectory(file_obj))
+            //            bool isDir = IsDirectory(file_obj);
+
+            //            if (readWriteAttributes || isDir)
             //            {
-            //                info.IsDirectory = IsDirectory(file_obj);
+            //                info.IsDirectory = isDir;
             //                info.Context = new object();
             //                return DokanResult.Success;
             //            }
@@ -122,6 +146,8 @@ namespace GangsDrive.connector
             //        case FileMode.CreateNew:
             //            if (exists)
             //                return DokanResult.FileExists;
+
+            //            // upload empty file
 
             //            // cache invalidate
 
@@ -142,9 +168,10 @@ namespace GangsDrive.connector
 
             //    try
             //    {
-            //        var web_stream = _driveService.HttpClient.GetStreamAsync(file_obj.DownloadUrl); 
-            //        web_stream.Wait();
-            //        info.Context = web_stream.Result;
+            //        //var web_stream = _driveService.HttpClient.GetStreamAsync(file_obj.DownloadUrl);
+            //        //web_stream.Wait();
+            //        //info.Context = web_stream.Result;
+            //        info.Context = file_obj;
             //    }
             //    catch (Exception e)
             //    {
@@ -174,10 +201,10 @@ namespace GangsDrive.connector
 
         public NtStatus FindFiles(string fileName, out IList<FileInformation> files, DokanFileInfo info)
         {
+            Debug.Print("[FindFiles] filename : {0}", fileName);
+
             string path = ToUnixStylePath(fileName);
             IList<Google.Apis.Drive.v2.Data.File> file_list = GetChildrenById(GetIdByPath(path));
-
-            //Debug.Print("[FindFiles] filename : {0}", fileName);
 
             files = new List<FileInformation>();
 
@@ -207,14 +234,7 @@ namespace GangsDrive.connector
 
         public NtStatus FlushFileBuffers(string fileName, DokanFileInfo info)
         {
-            if (info.Context != null)
-            {
-                (info.Context as FileStream).Flush();
-
-                return DokanResult.Success;
-            }
-            else return DokanResult.Unsuccessful;
-            
+            return DokanResult.Success;
         }
 
         public NtStatus GetDiskFreeSpace(out long free, out long total, out long used, DokanFileInfo info)
@@ -228,6 +248,8 @@ namespace GangsDrive.connector
 
         public NtStatus GetFileInformation(string fileName, out FileInformation fileInfo, DokanFileInfo info)
         {
+            Debug.Print("[GetFileInformation] fileName : {0}, info.Context : {1}", fileName, info.Context==null ? "null" : "notnull");
+
             string path = ToUnixStylePath(fileName);
             Google.Apis.Drive.v2.Data.File file_obj = GetFileById(GetIdByPath(path));
 
@@ -283,74 +305,81 @@ namespace GangsDrive.connector
 
         public NtStatus ReadFile(string fileName, byte[] buffer, out int bytesRead, long offset, DokanFileInfo info)
         {
-            //try
+            Debug.Print("[ReadFile] fileName : {0}", fileName);
+
+            //if(buffer.Length < 10)
             //{
-            //    string path = ToUnixStylePath(fileName);
-            //    Google.Apis.Drive.v2.Data.File file_obj = GetFileById(GetIdByPath(path));
-
-            //    if (info.Context == null)
-            //    {
-            //        if (IsDirectory(file_obj))
-            //        {
-            //            bytesRead = 0;
-            //            return DokanResult.AccessDenied;
-            //        }
-
-            //        var web_stream = _driveService.HttpClient.GetStreamAsync(file_obj.DownloadUrl);
-            //        web_stream.Wait();
-            //        var result = web_stream.Result;
-            //        result.Position = offset;
-            //        bytesRead = result.Read(buffer, 0, buffer.Length);
- 
-            //        //using (var stream = result)
-            //        //{
-            //        //    //result.CopyTo(stream);
-            //        //    stream.Position = offset;
-            //        //    bytesRead = stream.Read(buffer, 0, buffer.Length);
-            //        //}
-            //    }
-            //    else
-            //    {
-            //        Stream stream = info.Context as Stream;
-
-            //        lock (stream)
-            //        {
-            //            stream.Position = offset;
-            //            bytesRead = stream.Read(buffer, 0, buffer.Length);
-            //        }
-            //    }
-
-            //    return DokanResult.Success;
-            //}
-            //catch (FileNotFoundException e)
-            //{
-            //    GangsDrive.util.DriverError.DebugError(e, _driverName, _isMounted);
             //    bytesRead = 0;
-            //    return DokanResult.FileNotFound;
+            //    return DokanResult.Error;
             //}
 
-            bytesRead = 0;
-            return DokanResult.Error;
+            //for (int i = 0; i < 10; i++)
+            //{
+            //    buffer[i] = 0x47;
+            //}
+            //bytesRead = 10;
+            //return DokanResult.Success;
+
+
+            Google.Apis.Drive.v2.Data.File file_obj;
+
+            Debug.Print("read : {0} offset : {1}", fileName, offset);
+
+            if (info.Context == null)
+            {
+                if (info.IsDirectory)
+                {
+                    bytesRead = 0;
+                    return DokanResult.AccessDenied;
+                }
+
+                file_obj = GetFileById(GetIdByPath(ToUnixStylePath(fileName)));
+            }
+            else
+            {
+                file_obj = info.Context as Google.Apis.Drive.v2.Data.File;
+            }
+
+
+
+            _driveService.HttpClient.DefaultRequestHeaders.Range = new System.Net.Http.Headers.RangeHeaderValue(offset, offset + buffer.Length - 1);
+
+            try
+            {
+                Task<Stream> task = _driveService.HttpClient.GetStreamAsync(file_obj.DownloadUrl);
+                task.Wait();
+                var stream = task.Result;
+
+                Debug.Print("받았다!!");
+
+                bytesRead = stream.Read(buffer, 0, buffer.Length);
+            }
+            catch (AggregateException e)
+            {
+                bytesRead = 0;
+                Debug.Print("aggregate exception : {0}----------------------------------", e.Message);
+                foreach (var ex in e.InnerExceptions)
+                {
+                    Debug.Print(ex.StackTrace);
+                }
+                Debug.Print("-----------------------------------------------------------");
+                return DokanResult.Error;
+            }
+
+            // restore Range header
+            _driveService.HttpClient.DefaultRequestHeaders.Range = new System.Net.Http.Headers.RangeHeaderValue();
+
+            return DokanResult.Success;
         }
 
         public NtStatus SetAllocationSize(string fileName, long length, DokanFileInfo info)
         {
-            if (info.Context != null)
-            {
-                (info.Context as FileStream).SetLength(length);
-                return DokanResult.Success;
-            }
-            else return DokanResult.Unsuccessful;
+            return DokanResult.Error;
         }
 
         public NtStatus SetEndOfFile(string fileName, long length, DokanFileInfo info)
         {
-            if (info.Context != null)
-            {
-                (info.Context as FileStream).SetLength(length);
-                return DokanResult.Success;
-            }
-            else return DokanResult.Unsuccessful;
+            return DokanResult.Error;
         }
 
         public NtStatus SetFileAttributes(string fileName, FileAttributes attributes, DokanFileInfo info)
@@ -380,6 +409,8 @@ namespace GangsDrive.connector
 
         public NtStatus WriteFile(string fileName, byte[] buffer, out int bytesWritten, long offset, DokanFileInfo info)
         {
+            Debug.Print("[WriteFile] fileName : {0}", fileName);
+
             bytesWritten = 0;
             return DokanResult.Error;
         }
@@ -471,65 +502,77 @@ namespace GangsDrive.connector
 
         public string GetIdByPath(string path)
         {
-            path = path.Substring(1);
+            Debug.Print("[GetIdBypath] path : {0}", path);
+
+            path = path.Replace("//", "");
             if (path == "/" || path == "")
                 return "root";
 
             string[] path_list = path.Split('/');
-            List<Google.Apis.Drive.v2.Data.File> file_search_list = new List<Google.Apis.Drive.v2.Data.File>();
 
-            try
+
+
+
+            string currentDirectoryId = "root";
+
+            for (int i = 0; i < path_list.Length; i++)
             {
                 FilesResource.ListRequest req = _driveService.Files.List();
-                do
-                {
-                    req.Q = "title='" + path_list.Last<string>() + "'";
-                    FileList file_search = req.Execute();
-                    file_search_list.AddRange(file_search.Items);
-                } while (!String.IsNullOrEmpty(req.PageToken));
-            }
-            catch (IOException io)
-            {
-                return null;
+                req.Q = string.Format("title='{0}' and '{1}' in parents", path_list[i], currentDirectoryId);
+                FileList files = req.Execute();
+
+                if (files.Items.Count == 0)
+                    return null;
+
+                currentDirectoryId = files.Items[0].Id;
             }
 
-            if (file_search_list.Count == 1)
-            {
-                return file_search_list.First<Google.Apis.Drive.v2.Data.File>().Id;
-            }
-            else if (file_search_list.Count > 1)
-            {
-                int last_idx = path_list.Length - 2;
-                Google.Apis.Drive.v2.Data.File ret = new Google.Apis.Drive.v2.Data.File();
-                foreach (Google.Apis.Drive.v2.Data.File f in file_search_list)
-                {
-                    if (GetRecursiveParent(path, f.Parents, last_idx) != null)
-                    {
-                        ret = f;
-                        break;
-                    }
-                }
+            return currentDirectoryId;
 
-                return ret.Id;
-            }
-            else return null;
+
+
+
+            //List<Google.Apis.Drive.v2.Data.File> file_search_list = new List<Google.Apis.Drive.v2.Data.File>();
+
+            //try
+            //{
+            //    FilesResource.ListRequest req = _driveService.Files.List();
+            //    do
+            //    {
+            //        req.Q = "title='" + path_list.Last<string>() + "'";
+            //        FileList file_search = req.Execute();
+            //        file_search_list.AddRange(file_search.Items);
+            //    } while (!String.IsNullOrEmpty(req.PageToken));
+            //}
+            //catch (IOException io)
+            //{
+            //    return null;
+            //}
+            
+            //if (file_search_list.Count == 1)
+            //{
+            //    return file_search_list.First<Google.Apis.Drive.v2.Data.File>().Id;
+            //}
+            //else if (file_search_list.Count > 1)
+            //{
+            //    int last_idx = path_list.Length - 2;
+            //    Google.Apis.Drive.v2.Data.File ret = new Google.Apis.Drive.v2.Data.File();
+            //    foreach (Google.Apis.Drive.v2.Data.File f in file_search_list)
+            //    {
+            //        if (GetRecursiveParent(path, f.Parents, last_idx) != null)
+            //        {
+            //            ret = f;
+            //            break;
+            //        }
+            //    }
+
+            //    return ret.Id;
+            //}
+            //else return null;
         }
         public List<Google.Apis.Drive.v2.Data.File> GetChildrenById(string id)
         {
             List<Google.Apis.Drive.v2.Data.File> result = new List<Google.Apis.Drive.v2.Data.File>();
-
-            //ChildrenResource.ListRequest child_req = _driveService.Children.List(id);
-            //ChildList ch = child_req.Execute();
-
-
-
-            //foreach (ChildReference a in ch.Items)
-            //{
-            //    FilesResource.GetRequest get_file = _driveService.Files.Get(a.Id);
-            //    Google.Apis.Drive.v2.Data.File file_obj = get_file.Execute();
-            //    result.Add(file_obj);
-            //}
-
 
             FilesResource.ListRequest req = _driveService.Files.List();
             req.Q = "trashed=false";
@@ -537,8 +580,6 @@ namespace GangsDrive.connector
 
             FileList files = req.Execute();
             result = files.Items.ToList<Google.Apis.Drive.v2.Data.File>();
-
-            
 
             return result;
         }
