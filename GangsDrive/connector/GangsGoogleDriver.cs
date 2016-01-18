@@ -308,25 +308,14 @@ namespace GangsDrive.connector
 
         public NtStatus ReadFile(string fileName, byte[] buffer, out int bytesRead, long offset, DokanFileInfo info)
         {
-            Debug.Print("[ReadFile] fileName : {0}", fileName);
-
-            //if(buffer.Length < 10)
-            //{
-            //    bytesRead = 0;
-            //    return DokanResult.Error;
-            //}
-
-            //for (int i = 0; i < 10; i++)
-            //{
-            //    buffer[i] = 0x47;
-            //}
-            //bytesRead = 10;
-            //return DokanResult.Success;
+            Debug.Print(
+                "[ReadFile] fileName : {0}, offset : {1}, info.Context : {2}",
+                fileName,
+                offset,
+                info.Context is Google.Apis.Drive.v2.Data.File);
 
 
             Google.Apis.Drive.v2.Data.File file_obj;
-
-            Debug.Print("read : {0} offset : {1}", fileName, offset);
 
             if (info.Context == null)
             {
@@ -343,12 +332,25 @@ namespace GangsDrive.connector
                 file_obj = info.Context as Google.Apis.Drive.v2.Data.File;
             }
 
+            long? from = offset;
+            long? to = offset + buffer.Length - 1;
+
+            // do not raise 416 HTTP response code
+            if(from >= file_obj.FileSize)
+            {
+                bytesRead = 0;
+                return DokanResult.Success;
+            }
+
+            // do not raise 416 HTTP response code
+            if (offset + buffer.Length - 1 >= file_obj.FileSize)
+                to = null;  // receive to EOF
 
 
-            _driveService.HttpClient.DefaultRequestHeaders.Range = new System.Net.Http.Headers.RangeHeaderValue(offset, offset + buffer.Length - 1);
 
             try
             {
+                _driveService.HttpClient.DefaultRequestHeaders.Range = new System.Net.Http.Headers.RangeHeaderValue(from, to);
                 Task<Stream> task = _driveService.HttpClient.GetStreamAsync(file_obj.DownloadUrl);
                 task.Wait();
                 var stream = task.Result;
@@ -363,14 +365,16 @@ namespace GangsDrive.connector
                 Debug.Print("aggregate exception : {0}----------------------------------", e.Message);
                 foreach (var ex in e.InnerExceptions)
                 {
-                    Debug.Print(ex.StackTrace);
+                    Debug.Print("{0} : {1}", ex.GetType(), ex.Message);
                 }
                 Debug.Print("-----------------------------------------------------------");
                 return DokanResult.Error;
             }
-
-            // restore Range header
-            _driveService.HttpClient.DefaultRequestHeaders.Range = new System.Net.Http.Headers.RangeHeaderValue();
+            finally
+            {
+                // restore Range header
+                _driveService.HttpClient.DefaultRequestHeaders.Range = null;
+            }
 
             return DokanResult.Success;
         }
