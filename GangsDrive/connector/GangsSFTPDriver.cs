@@ -86,11 +86,6 @@ namespace GangsDrive
             //Debug.WriteLine(@"{0} : {1} {2}", fileName, mode.ToString(), access.ToString());
 
             fileName = ToUnixStylePath(fileName);
-            
-            if(fileName.EndsWith("pk.txt", StringComparison.OrdinalIgnoreCase))
-            {
-                Debug.Print("pk.txt, {0}, {1}, {2}, {3}", access.ToString(), share.ToString(), mode.ToString(), options.ToString());
-            }
 
             if (fileName.EndsWith("desktop.ini", StringComparison.OrdinalIgnoreCase) ||
                 fileName.EndsWith("autorun.inf", StringComparison.OrdinalIgnoreCase))
@@ -98,9 +93,7 @@ namespace GangsDrive
                 return DokanResult.FileNotFound;
             }
 
-            Debug.Print("11");
             bool exists = sftpClient.Exists(fileName);
-            Debug.Print("22");
 
             // todo : add to memory cache
 
@@ -402,6 +395,7 @@ namespace GangsDrive
 
         public NtStatus ReadFile(string fileName, byte[] buffer, out int bytesRead, long offset, DokanFileInfo info)
         {
+            Debug.Print("read : {0} offset : {1}", fileName, offset);
             if (info.Context == null)
             {
                 using (SftpFileStream stream = sftpClient.Open(ToUnixStylePath(fileName), FileMode.Open, System.IO.FileAccess.Read))

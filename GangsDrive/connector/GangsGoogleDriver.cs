@@ -15,6 +15,7 @@ using System.IO;
 using System.Diagnostics;
 using DokanNet;
 using FileAccess = DokanNet.FileAccess;
+using System.Runtime.Caching;
 
 namespace GangsDrive.connector
 {
@@ -35,11 +36,13 @@ namespace GangsDrive.connector
                                   };
         private const string ApplicationName = "GangsDrive";
 
+        private MemoryCache _cache = MemoryCache.Default;
+
         private UserCredential _userCredential;
         private DriveService _driveService;
 
         public GangsGoogleDriver(string mountPoint)
-            :base(mountPoint, "Google")
+            : base(mountPoint, "Google")
         {
         }
 
@@ -51,12 +54,12 @@ namespace GangsDrive.connector
         #region Implementation of IDokanOperations
         public void Cleanup(string fileName, DokanFileInfo info)
         {
-            
+
         }
 
         public void CloseFile(string fileName, DokanFileInfo info)
         {
-            
+
         }
 
         public NtStatus CreateDirectory(string fileName, DokanFileInfo info)
@@ -102,7 +105,7 @@ namespace GangsDrive.connector
             }
             else
             {
-                switch(mode)
+                switch (mode)
                 {
                     case FileMode.Open:
                         if (!exists)
@@ -220,7 +223,7 @@ namespace GangsDrive.connector
                     Attributes = FileAttributes.NotContentIndexed,
                 };
 
-                if(IsDirectory(file))
+                if (IsDirectory(file))
                 {
                     finfo.Attributes |= FileAttributes.Directory;
                     finfo.Length = 0;
@@ -248,7 +251,7 @@ namespace GangsDrive.connector
 
         public NtStatus GetFileInformation(string fileName, out FileInformation fileInfo, DokanFileInfo info)
         {
-            Debug.Print("[GetFileInformation] fileName : {0}, info.Context : {1}", fileName, info.Context==null ? "null" : "notnull");
+            Debug.Print("[GetFileInformation] fileName : {0}, info.Context : {1}", fileName, info.Context == null ? "null" : "notnull");
 
             string path = ToUnixStylePath(fileName);
             Google.Apis.Drive.v2.Data.File file_obj = GetFileById(GetIdByPath(path));
@@ -263,7 +266,7 @@ namespace GangsDrive.connector
                 Attributes = FileAttributes.NotContentIndexed,
             };
 
-            if(IsDirectory(file_obj))
+            if (IsDirectory(file_obj))
             {
                 fileInfo.Attributes |= FileAttributes.Directory;
                 fileInfo.Length = 0;
@@ -469,7 +472,7 @@ namespace GangsDrive.connector
         }
         #endregion
 
-        #region GoogleDrive API Helper 
+        #region GoogleDrive API Helper
         public Google.Apis.Drive.v2.Data.File CreateDirectory(string path)
         {
             path = path.Substring(1);
@@ -508,6 +511,17 @@ namespace GangsDrive.connector
             if (path == "/" || path == "")
                 return "root";
 
+
+            object cachedId = _cache.Get("pathid:" + path);
+            if (cachedId != null)
+            {
+                Debug.Print("[Cache Hit] path to id : {0}", path);
+                return (string)cachedId;
+            }
+
+
+
+
             string[] path_list = path.Split('/');
 
 
@@ -525,7 +539,12 @@ namespace GangsDrive.connector
                     return null;
 
                 currentDirectoryId = files.Items[0].Id;
+
+                string curPath = string.Join("/", path_list.Take(i + 1));
+                _cache.Set("pathid:" + curPath, currentDirectoryId, DateTimeOffset.Now.AddSeconds(10));
             }
+
+
 
             return currentDirectoryId;
 
@@ -548,7 +567,7 @@ namespace GangsDrive.connector
             //{
             //    return null;
             //}
-            
+
             //if (file_search_list.Count == 1)
             //{
             //    return file_search_list.First<Google.Apis.Drive.v2.Data.File>().Id;
@@ -570,6 +589,7 @@ namespace GangsDrive.connector
             //}
             //else return null;
         }
+
         public List<Google.Apis.Drive.v2.Data.File> GetChildrenById(string id)
         {
             List<Google.Apis.Drive.v2.Data.File> result = new List<Google.Apis.Drive.v2.Data.File>();
@@ -581,8 +601,12 @@ namespace GangsDrive.connector
             FileList files = req.Execute();
             result = files.Items.ToList<Google.Apis.Drive.v2.Data.File>();
 
+            foreach(var file in result)
+                _cache.Set("idfile:" + file.Id, file, DateTimeOffset.Now.AddSeconds(10));
+
             return result;
         }
+
         public bool IsDirectory(Google.Apis.Drive.v2.Data.File file)
         {
             if (!file.Copyable.HasValue)
@@ -592,12 +616,22 @@ namespace GangsDrive.connector
 
             return (!file.Copyable.Value && file.MimeType == "application/vnd.google-apps.folder");
         }
+
         public Google.Apis.Drive.v2.Data.File GetFileById(string id)
         {
+            object cachedFile = _cache.Get("idfile:" + id);
+            if (cachedFile != null)
+                return (Google.Apis.Drive.v2.Data.File)cachedFile;
+
+
             if (id != null)
             {
-                FilesResource.GetRequest file = _driveService.Files.Get(id);
-                return file.Execute();
+                FilesResource.GetRequest fileRequest = _driveService.Files.Get(id);
+                Google.Apis.Drive.v2.Data.File file = fileRequest.Execute();
+
+                _cache.Set("idfile:" + id, file, DateTimeOffset.Now.AddSeconds(10));
+
+                return file;
             }
             else return new Google.Apis.Drive.v2.Data.File();
         }
